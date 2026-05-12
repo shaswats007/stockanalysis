@@ -29,16 +29,36 @@ _POPULAR_TICKERS = [
 ]
 
 
+_SEC_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
+_SEC_HEADERS = {"User-Agent": "stockanalysis/1.0 shaswats.007@gmail.com"}
+_SEC_EXCHANGES = {"Nasdaq", "NYSE", "NYSE MKT", "NYSE ARCA", "CBOE"}
+
+
 @st.cache_data(show_spinner=False, ttl=86400)
 def _load_tickers() -> list[str]:
+    tickers: set[str] = set(_POPULAR_TICKERS)
     try:
-        import pandas as pd
-        sp500 = pd.read_html(
-            "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        )[0]["Symbol"].tolist()
-        return sorted(set(sp500 + _POPULAR_TICKERS))
+        import requests
+        data = requests.get(_SEC_URL, headers=_SEC_HEADERS, timeout=15).json()
+        # fields: [cik, name, ticker, exchange]
+        tickers.update(
+            row[2] for row in data["data"]
+            if row[2]
+            and str(row[2]).replace("-", "").isalpha()
+            and len(str(row[2])) <= 5
+            and row[3] in _SEC_EXCHANGES
+        )
     except Exception:
-        return sorted(_POPULAR_TICKERS)
+        # Fallback: S&P 500 from Wikipedia
+        try:
+            import pandas as pd
+            sp500 = pd.read_html(
+                "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            )[0]["Symbol"].tolist()
+            tickers.update(sp500)
+        except Exception:
+            pass
+    return sorted(tickers)
 
 
 _WORKING_MODELS = [
